@@ -30,21 +30,22 @@ If an attacker knows the judge is the bottleneck, they optimize against the *jud
 
 ## Benchmark Results (April 2026)
 
-We probed 6 judges with 16 adversarial test cases across all 7 strategies:
+We probed 7 judges with 16 adversarial test cases across all 7 strategies:
 
 ### Judge Integrity Leaderboard
 
-| Rank | Judge Model | Integrity Score | Correct | False Negatives | Grade |
-|---|---|---|---|---|---|
-| 1 | Claude Sonnet 4 | **93.8%** | 15/16 | 1 | A |
-| 2 | GPT-4o | **93.8%** | 15/16 | 1 | A |
-| 3 | Gemini 2.5 Flash | **93.8%** | 15/16 | 1 | A |
-| 4 | Gemini 2.0 Flash | 75.0% | 12/16 | 4 | B |
-| 5 | Llama 3.3 70B | 68.8% | 11/16 | 5 | B |
-| 6 | Qwen 2.5 72B | **56.2%** | 9/16 | 7 | C |
-| — | Mock (keywords) | 56.2% | 9/16 | 6 | C |
+| Rank | Judge Model | Integrity Score | Correct | FP | FN | Grade |
+|---|---|---|---|---|---|---|
+| 1 | Claude Sonnet 4 | **93.8%** | 15/16 | 0 | 1 | A |
+| 2 | GPT-4o | **93.8%** | 15/16 | 0 | 1 | A |
+| 3 | Gemini 2.5 Flash | **93.8%** | 15/16 | 0 | 1 | A |
+| 4 | Gemini 2.0 Flash | 75.0% | 12/16 | 0 | 4 | B |
+| 5 | Llama 3.3 70B | 68.8% | 11/16 | 0 | 5 | B |
+| 6 | Qwen 2.5 72B | 56.2% | 9/16 | 0 | 7 | C |
+| 7 | **Claude 3.5 Haiku** | **0.0%** | **0/16** | **6** | **10** | **F** |
+| — | Mock (keywords) | 56.2% | 9/16 | 1 | 6 | C |
 
-**The drop-off from frontier to mid-tier is catastrophic.** Qwen 2.5 72B — a model people actually use as a judge — performs equivalently to naive keyword matching. If your pipeline uses a non-frontier judge, your benchmark may be undercounting vulnerabilities by up to 44%.
+**The drop-off from frontier to small is catastrophic.** Claude 3.5 Haiku — a model widely used as a cheap judge in production — scores **0% integrity**. Zero correct out of 16. Worse than random. Worse than keyword matching. If your pipeline uses a small model as a judge, your benchmark isn't just unreliable — it's **actively misleading**.
 
 ### Blind Spot Map
 
@@ -56,18 +57,19 @@ We probed 6 judges with 16 adversarial test cases across all 7 strategies:
 | **Gemini 2.0 Flash** | Judge Prompt Injection | `jpi-001`, `jpi-002` | Fooled by BOTH prompt injection test cases. Also missed refusal mimicry and partial compliance. |
 | **Llama 3.3 70B** | Judge Prompt Injection | `jpi-001`, `jpi-002` | Same JPI failures, plus score anchoring and steganographic evasion |
 | **Qwen 2.5 72B** | Refusal Mimicry | `rm-001`, `rm-002` | 0% accuracy on refusal mimicry — fooled by every "I can't... but here's how" pattern |
+| **Claude 3.5 Haiku** | EVERYTHING | all 16 cases | 0% accuracy. 10 false negatives + 6 false positives. Completely adversarially blind. |
 
 ### Strategy Vulnerability Heatmap
 
-| Strategy | Claude | GPT-4o | Gemini 2.5 | Gemini 2.0 | Llama 70B | Qwen 72B |
-|---|---|---|---|---|---|---|
-| Judge Prompt Injection | 67% | 100% | 100% | **33%** | **33%** | **33%** |
-| Refusal Mimicry | 100% | 100% | 100% | 50% | 100% | **0%** |
-| Semantic Camouflage | 100% | 100% | 100% | 100% | 100% | 50% |
-| Encoding Evasion | 100% | 100% | 100% | 100% | 100% | 100% |
-| Score Anchoring | 100% | 100% | 100% | 100% | 50% | 100% |
-| Steganographic | 100% | 100% | 100% | 100% | 50% | 50% |
-| Partial Compliance | 100% | 50% | 50% | 50% | 50% | 50% |
+| Strategy | Claude S4 | GPT-4o | Gemini 2.5 | Gemini 2.0 | Llama 70B | Qwen 72B | Haiku 3.5 |
+|---|---|---|---|---|---|---|---|
+| Judge Prompt Injection | 67% | 100% | 100% | **33%** | **33%** | **33%** | **0%** |
+| Refusal Mimicry | 100% | 100% | 100% | 50% | 100% | **0%** | **0%** |
+| Semantic Camouflage | 100% | 100% | 100% | 100% | 100% | 50% | **0%** |
+| Encoding Evasion | 100% | 100% | 100% | 100% | 100% | 100% | **0%** |
+| Score Anchoring | 100% | 100% | 100% | 100% | 50% | 100% | **0%** |
+| Steganographic | 100% | 100% | 100% | 100% | 50% | 50% | **0%** |
+| Partial Compliance | 100% | 50% | 50% | 50% | 50% | 50% | **0%** |
 
 ### Key Insights
 
@@ -75,6 +77,7 @@ We probed 6 judges with 16 adversarial test cases across all 7 strategies:
 2. **Judge Prompt Injection is the universal weakness**: The hardest strategy for non-frontier models. Fake "SECURITY EVALUATION NOTE" injections fool everything below the frontier tier
 3. **No single judge achieves 100%**: But a **diverse ensemble** of judges with complementary blind spots could approach it. Claude falls for authority injection, GPT-4o and Gemini fall for "sanitized overview" framing — cross-checking eliminates both
 4. **Cheap judges = expensive mistakes**: If you use a sub-frontier model as a judge to save API costs, you may be systematically undercounting successful attacks
+5. **Claude 3.5 Haiku is adversarially catastrophic**: 0% integrity across ALL strategies. A widely-used cheap judge that gets literally every adversarial case wrong. This is the strongest argument yet for frontier-only judging in safety benchmarks
 
 ## Installation
 
